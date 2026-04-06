@@ -1,5 +1,5 @@
 import { useCallback, useRef } from "react";
-import { App as AntdApp, Spin } from "antd";
+import { App as AntdApp } from "antd";
 import { ExecuteSQL } from "../../../wailsjs/go/main/App";
 import { useConnectionStore } from "../../stores/connectionStore";
 import { useEditorStore } from "../../stores/editorStore";
@@ -104,16 +104,14 @@ export function EditorPanel() {
         <EditorTabs />
       </div>
       <div className="editor-monaco-wrap">
-        <Spin spinning={executeLoading} tip="Running…" size="large">
-          <SQLEditor
-            key={activeTabId}
-            ref={editorRef}
-            value={activeTab.content}
-            onChange={(v) => updateContent(activeTabId, v)}
-            onExecute={() => void runExecute()}
-            onFormatResult={onFormatResult}
-          />
-        </Spin>
+        <SQLEditor
+          key={activeTabId}
+          ref={editorRef}
+          value={activeTab.content}
+          onChange={(v) => updateContent(activeTabId, v)}
+          onExecute={() => void runExecute()}
+          onFormatResult={onFormatResult}
+        />
       </div>
     </div>
   );

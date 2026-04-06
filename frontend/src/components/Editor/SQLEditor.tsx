@@ -1,6 +1,7 @@
 import { forwardRef, useCallback, useImperativeHandle, useRef } from "react";
 import Editor, { type OnMount } from "@monaco-editor/react";
 import type { editor } from "monaco-editor";
+import { MONACO_THEME_ORACLE_SQL } from "../../editor/monacoOracleTheme";
 import { formatOracleSql } from "../../utils/sqlFormatter";
 
 export type FormatSqlResult =
@@ -95,19 +96,24 @@ export const SQLEditor = forwardRef<SQLEditorHandle, SQLEditorProps>(
     return (
       <Editor
         height="100%"
-        theme="vs-dark"
+        theme={MONACO_THEME_ORACLE_SQL}
         language="sql"
         value={value}
         onChange={(v) => onChange(v ?? "")}
         onMount={handleMount}
         options={{
           fontSize: 14,
+          fontFamily:
+            "Consolas, 'Courier New', monospace, 'Apple Color Emoji', 'Segoe UI Emoji'",
           minimap: { enabled: false },
           lineNumbers: "on",
           wordWrap: "on",
           scrollBeyondLastLine: false,
           automaticLayout: true,
           tabSize: 2,
+          // WebView2: EditContext path can paint an invisible text layer while cursor still shows.
+          editContext: false,
+          experimentalWhitespaceRendering: "off",
         }}
       />
     );
