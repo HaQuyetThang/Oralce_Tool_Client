@@ -1,6 +1,7 @@
 import { loader } from "@monaco-editor/react";
 import * as monaco from "monaco-editor";
 import EditorWorker from "monaco-editor/esm/vs/editor/editor.worker?worker";
+import { registerOracleSqlCompletionProvider } from "./editor/registerOracleSqlCompletionProvider";
 
 declare global {
   interface Window {
@@ -15,3 +16,5 @@ window.MonacoEnvironment = {
 };
 
 loader.config({ monaco });
+
+registerOracleSqlCompletionProvider();

@@ -8,6 +8,7 @@ import {
   GetSavedConnections,
   SaveConnection,
 } from "../../wailsjs/go/main/App";
+import { useSchemaStore } from "./schemaStore";
 
 export interface ConnectionState {
   connections: ConnectionConfig[];
@@ -76,6 +77,11 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
         connectionStatus: "connected",
         connectionError: null,
       });
+      const sessionUser =
+        get().connections.find((c) => c.id === trimmed)?.username ?? "";
+      void import("../editor/sqlCompletionPrefetch").then((mod) => {
+        void mod.prefetchAfterConnect(active ?? trimmed, sessionUser);
+      });
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       set({
@@ -99,6 +105,7 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
     set({ connectionError: null });
     try {
       await Disconnect(target);
+      useSchemaStore.getState().invalidateConnection(target);
       const active = await GetActiveConnectionID().catch(() => "");
       set({
         activeConnectionId: active ?? "",
@@ -133,6 +140,7 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
     set({ connectionError: null });
     try {
       await DeleteConnection(trimmed);
+      useSchemaStore.getState().invalidateConnection(trimmed);
       const wasActive = get().activeConnectionId === trimmed;
       await get().loadConnections();
       if (wasActive) {

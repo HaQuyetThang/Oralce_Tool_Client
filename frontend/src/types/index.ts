@@ -26,6 +26,7 @@ export interface QueryResult {
   execTimeMs: number;
   messages: string[] | null;
   hasMore: boolean;
+  dbmsOutputLines?: string[] | null;
 }
 
 export interface EditorTab {
@@ -37,3 +38,29 @@ export interface EditorTab {
 }
 
 export type ConnectionStatus = "idle" | "connecting" | "connected" | "error";
+
+/** Schema browser (mirrors Go models/schema.go). */
+export interface TableInfo {
+  name: string;
+  numRows?: number;
+}
+
+export interface ColumnDetail {
+  name: string;
+  dataType: string;
+  dataLength: number;
+  dataPrecision?: number;
+  dataScale?: number;
+  nullable: boolean;
+  columnId: number;
+}
+
+export interface IndexInfo {
+  name: string;
+  uniqueness: string;
+}
+
+export interface ConstraintInfo {
+  name: string;
+  constraintType: string;
+}

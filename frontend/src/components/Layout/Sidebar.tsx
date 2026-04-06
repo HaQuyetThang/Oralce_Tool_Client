@@ -3,12 +3,14 @@ import { App as AntdApp, Button, Space, Typography } from "antd";
 import { PlusOutlined } from "@ant-design/icons";
 import { ConnectionDialog } from "../Connection/ConnectionDialog";
 import { ConnectionList } from "../Connection/ConnectionList";
+import { SchemaTree } from "../Schema/SchemaTree";
 import { useConnectionStore } from "../../stores/connectionStore";
 import type { ConnectionConfig } from "../../types";
 
 export function Sidebar() {
   const { message } = AntdApp.useApp();
-  const { loadConnections } = useConnectionStore();
+  const { loadConnections, activeConnectionId, isConnected } =
+    useConnectionStore();
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [dialogInitial, setDialogInitial] = useState<ConnectionConfig | null>(
@@ -61,6 +63,11 @@ export function Sidebar() {
             }
             openEdit(c);
           }}
+        />
+      </div>
+      <div className="sidebar-schema-wrap">
+        <SchemaTree
+          connectionId={isConnected ? activeConnectionId : ""}
         />
       </div>
 

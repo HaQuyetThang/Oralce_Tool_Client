@@ -2,6 +2,7 @@ import { Empty, Tabs } from "antd";
 import { useEditorStore, type ResultSubTab } from "../../stores/editorStore";
 import { hasResultGrid } from "../../utils/queryResult";
 import { DataGrid } from "./DataGrid";
+import { DbmsOutputPanel } from "./DbmsOutputPanel";
 import { MessagesPanel } from "./MessagesPanel";
 
 import "./results.css";
@@ -17,10 +18,17 @@ export function ResultPanel() {
   const receivedAt = resultReceivedAt[activeTabId] ?? Date.now();
 
   const showGrid = result != null && hasResultGrid(result);
+  const hasDbms =
+    Boolean(result?.dbmsOutputLines && result.dbmsOutputLines.length > 0);
   const storedSub: ResultSubTab =
     resultSubTabByTab[activeTabId] ?? (showGrid ? "results" : "messages");
-  const innerTab: ResultSubTab =
-    storedSub === "results" && !showGrid ? "messages" : storedSub;
+  let innerTab: ResultSubTab = storedSub;
+  if (innerTab === "results" && !showGrid) {
+    innerTab = "messages";
+  }
+  if (innerTab === "dbms" && !hasDbms) {
+    innerTab = "messages";
+  }
 
   if (result == null) {
     return (
@@ -61,6 +69,11 @@ export function ResultPanel() {
             key: "messages",
             label: "Messages",
             children: <MessagesPanel result={result} receivedAt={receivedAt} />,
+          },
+          {
+            key: "dbms",
+            label: "DBMS Output",
+            children: <DbmsOutputPanel result={result} />,
           },
         ]}
       />

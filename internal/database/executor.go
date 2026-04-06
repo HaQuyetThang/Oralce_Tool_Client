@@ -7,6 +7,8 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
 	"unicode/utf8"
 
@@ -30,9 +32,18 @@ const (
 	KindPLSQL
 )
 
+type runningOp struct {
+	id     uint64
+	cancel context.CancelFunc
+}
+
 // QueryExecutor runs SQL against pools held by a ConnectionManager.
 type QueryExecutor struct {
 	mgr *ConnectionManager
+
+	opMu      sync.Mutex
+	running   map[string]runningOp // resolved connection id -> current op
+	opIDGen   uint64
 }
 
 // NewQueryExecutor constructs an executor bound to mgr.
@@ -40,22 +51,63 @@ func NewQueryExecutor(mgr *ConnectionManager) *QueryExecutor {
 	if mgr == nil {
 		panic("database: NewQueryExecutor(nil)")
 	}
-	return &QueryExecutor{mgr: mgr}
+	return &QueryExecutor{
+		mgr:     mgr,
+		running: make(map[string]runningOp),
+	}
+}
+
+// beginQueryOp registers a cancellable context for operations on the resolved connection.
+// finish must be called when the operation ends (defer).
+func (e *QueryExecutor) beginQueryOp(connID string) (ctx context.Context, finish func(), err error) {
+	_, resolvedID, err := e.mgr.ResolveDB(connID)
+	if err != nil {
+		return nil, nil, err
+	}
+	parent, cancelRoot := context.WithCancel(context.Background())
+	ctx, cancelTimeout := context.WithTimeout(parent, defaultQueryTimeout)
+
+	opID := atomic.AddUint64(&e.opIDGen, 1)
+	handle := runningOp{id: opID, cancel: cancelRoot}
+
+	e.opMu.Lock()
+	if old, ok := e.running[resolvedID]; ok {
+		old.cancel()
+	}
+	e.running[resolvedID] = handle
+	e.opMu.Unlock()
+
+	finish = func() {
+		cancelTimeout()
+		e.opMu.Lock()
+		if cur, ok := e.running[resolvedID]; ok && cur.id == handle.id {
+			delete(e.running, resolvedID)
+		}
+		e.opMu.Unlock()
+		cancelRoot()
+	}
+	return ctx, finish, nil
+}
+
+// CancelQuery requests cancellation of the current operation on a connection (connID empty = active).
+func (e *QueryExecutor) CancelQuery(connID string) error {
+	_, resolvedID, err := e.mgr.ResolveDB(connID)
+	if err != nil {
+		return err
+	}
+	e.opMu.Lock()
+	h, ok := e.running[resolvedID]
+	e.opMu.Unlock()
+	if !ok {
+		return errors.New("no running query for this connection")
+	}
+	h.cancel()
+	return nil
 }
 
 func (e *QueryExecutor) resolveDB(connID string) (*sql.DB, error) {
-	id := strings.TrimSpace(connID)
-	if id == "" {
-		id = e.mgr.ActiveConnectionID()
-	}
-	if id == "" {
-		return nil, errors.New("no connection: pass connID or connect and set an active connection")
-	}
-	db := e.mgr.ConnectionByID(id)
-	if db == nil {
-		return nil, fmt.Errorf("not connected: %s", id)
-	}
-	return db, nil
+	db, _, err := e.mgr.ResolveDB(connID)
+	return db, err
 }
 
 func clampMaxRows(maxRows int) int {
@@ -114,8 +166,11 @@ func (e *QueryExecutor) ExecuteQuery(connID, sql string, maxRows int) (*models.Q
 	maxRows = clampMaxRows(maxRows)
 	start := time.Now()
 
-	ctx, cancel := context.WithTimeout(context.Background(), defaultQueryTimeout)
-	defer cancel()
+	ctx, finish, err := e.beginQueryOp(connID)
+	if err != nil {
+		return nil, err
+	}
+	defer finish()
 
 	rows, err := db.QueryContext(ctx, sql)
 	if err != nil {
@@ -187,8 +242,11 @@ func (e *QueryExecutor) ExecuteDML(connID, sql string) (*models.QueryResult, err
 		return nil, err
 	}
 	start := time.Now()
-	ctx, cancel := context.WithTimeout(context.Background(), defaultQueryTimeout)
-	defer cancel()
+	ctx, finish, err := e.beginQueryOp(connID)
+	if err != nil {
+		return nil, err
+	}
+	defer finish()
 
 	res, err := db.ExecContext(ctx, sql)
 	if err != nil {
@@ -230,7 +288,7 @@ func (e *QueryExecutor) Rollback(connID string) error {
 	return err
 }
 
-// Execute picks query vs DML from ClassifyStatement. PL/SQL blocks are rejected until Phase 2.
+// Execute picks query vs DML vs PL/SQL from ClassifyStatement.
 func (e *QueryExecutor) Execute(connID, sql string, maxRows int) (*models.QueryResult, error) {
 	switch ClassifyStatement(sql) {
 	case KindUnknown:
@@ -240,10 +298,112 @@ func (e *QueryExecutor) Execute(connID, sql string, maxRows int) (*models.QueryR
 	case KindDML:
 		return e.ExecuteDML(connID, sql)
 	case KindPLSQL:
-		return nil, fmt.Errorf("PL/SQL block: not supported in Phase 1 (use Phase 2 executor)")
+		return e.ExecutePLSQL(connID, sql)
 	default:
 		return nil, errors.New("unsupported statement")
 	}
+}
+
+const enableDBMSOutput = `BEGIN DBMS_OUTPUT.ENABLE(1000000); END;`
+
+// ExecutePLSQL runs an anonymous PL/SQL block on one pooled session and returns DBMS_OUTPUT lines.
+func (e *QueryExecutor) ExecutePLSQL(connID, plsql string) (*models.QueryResult, error) {
+	db, resolvedID, err := e.mgr.ResolveDB(connID)
+	if err != nil {
+		return nil, err
+	}
+	start := time.Now()
+
+	parent, cancelRoot := context.WithCancel(context.Background())
+	ctx, cancelTimeout := context.WithTimeout(parent, defaultQueryTimeout)
+
+	opID := atomic.AddUint64(&e.opIDGen, 1)
+	handle := runningOp{id: opID, cancel: cancelRoot}
+
+	e.opMu.Lock()
+	if old, ok := e.running[resolvedID]; ok {
+		old.cancel()
+	}
+	e.running[resolvedID] = handle
+	e.opMu.Unlock()
+
+	defer func() {
+		cancelTimeout()
+		e.opMu.Lock()
+		if cur, ok := e.running[resolvedID]; ok && cur.id == handle.id {
+			delete(e.running, resolvedID)
+		}
+		e.opMu.Unlock()
+		cancelRoot()
+	}()
+
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		return resultWithError(err, start)
+	}
+	defer conn.Close()
+
+	if _, err := conn.ExecContext(ctx, enableDBMSOutput); err != nil {
+		return resultWithError(err, start)
+	}
+
+	_, execErr := conn.ExecContext(ctx, plsql)
+	lines, drainErr := drainDBMSOutput(ctx, conn)
+
+	elapsed := time.Since(start).Milliseconds()
+	msgs := []string{"PL/SQL block completed."}
+	if execErr != nil {
+		msgs = []string{execErr.Error()}
+	}
+	if drainErr != nil && execErr == nil {
+		msgs = append(msgs, fmt.Sprintf("DBMS_OUTPUT read: %v", drainErr))
+	}
+
+	res := &models.QueryResult{
+		Columns:         nil,
+		Rows:            nil,
+		RowCount:        0,
+		ExecTime:        elapsed,
+		Messages:        msgs,
+		HasMore:         false,
+		DbmsOutputLines: lines,
+	}
+	if execErr != nil {
+		return res, execErr
+	}
+	return res, nil
+}
+
+// drainDBMSOutput reads lines from the session buffer using DBMS_OUTPUT.GET_LINE.
+func drainDBMSOutput(ctx context.Context, conn *sql.Conn) ([]string, error) {
+	const q = `
+DECLARE
+  l_line VARCHAR2(32767);
+  l_status PLS_INTEGER;
+BEGIN
+  DBMS_OUTPUT.GET_LINE(l_line, l_status);
+  :out_line := l_line;
+  :out_status := l_status;
+END;`
+	var lines []string
+	for {
+		var line sql.NullString
+		var status int32
+		_, err := conn.ExecContext(ctx, q,
+			sql.Named("out_line", sql.Out{Dest: &line}),
+			sql.Named("out_status", sql.Out{Dest: &status}),
+		)
+		if err != nil {
+			return lines, err
+		}
+		if status == 1 {
+			break
+		}
+		if line.Valid {
+			lines = append(lines, line.String)
+		}
+	}
+	return lines, nil
 }
 
 func resultWithError(err error, start time.Time) (*models.QueryResult, error) {

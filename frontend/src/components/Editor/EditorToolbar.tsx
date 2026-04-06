@@ -10,19 +10,21 @@ import {
 } from "antd";
 import {
   CheckOutlined,
+  FormatPainterOutlined,
   PlayCircleOutlined,
   RollbackOutlined,
   StopOutlined,
 } from "@ant-design/icons";
-import { Commit, Rollback } from "../../../wailsjs/go/main/App";
+import { CancelQuery, Commit, Rollback } from "../../../wailsjs/go/main/App";
 import { useConnectionStore } from "../../stores/connectionStore";
 import { useEditorStore } from "../../stores/editorStore";
 
 export interface EditorToolbarProps {
   onRun: () => void;
+  onFormat?: () => void;
 }
 
-export function EditorToolbar({ onRun }: EditorToolbarProps) {
+export function EditorToolbar({ onRun, onFormat }: EditorToolbarProps) {
   const { message } = AntdApp.useApp();
   const { connections, activeConnectionId } = useConnectionStore();
   const activeTabId = useEditorStore((s) => s.activeTabId);
@@ -49,6 +51,19 @@ export function EditorToolbar({ onRun }: EditorToolbarProps) {
       message.success("Committed");
     } catch (e) {
       message.error(e instanceof Error ? e.message : String(e));
+    }
+  };
+
+  const doCancel = async () => {
+    if (!effectiveConn) {
+      message.warning("No connection selected");
+      return;
+    }
+    try {
+      await CancelQuery(tabConn || "");
+      message.info("Cancel requested");
+    } catch (e) {
+      message.warning(e instanceof Error ? e.message : String(e));
     }
   };
 
@@ -86,8 +101,21 @@ export function EditorToolbar({ onRun }: EditorToolbarProps) {
             Run
           </Button>
         </Tooltip>
-        <Tooltip title="Cancel running query — planned for Phase 2">
-          <Button icon={<StopOutlined />} disabled>
+        <Tooltip title="Format SQL (selection if any, else whole script) — Shift+Alt+F">
+          <Button
+            icon={<FormatPainterOutlined />}
+            disabled={!onFormat}
+            onClick={() => onFormat?.()}
+          >
+            Format
+          </Button>
+        </Tooltip>
+        <Tooltip title="Cancel running query (same connection as this tab)">
+          <Button
+            icon={<StopOutlined />}
+            disabled={!executeLoading || !effectiveConn}
+            onClick={() => void doCancel()}
+          >
             Stop
           </Button>
         </Tooltip>
@@ -127,7 +155,7 @@ export function EditorToolbar({ onRun }: EditorToolbarProps) {
         className="editor-toolbar-hint"
         style={{ fontSize: 12, marginLeft: "auto" }}
       >
-        Ctrl+Enter — run
+        Ctrl+Enter — run · Shift+Alt+F — format
       </Typography.Text>
     </Flex>
   );

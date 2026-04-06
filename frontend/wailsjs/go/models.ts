@@ -1,5 +1,29 @@
 export namespace models {
 	
+	export class ColumnDetail {
+	    name: string;
+	    dataType: string;
+	    dataLength: number;
+	    dataPrecision?: number;
+	    dataScale?: number;
+	    nullable: boolean;
+	    columnId: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new ColumnDetail(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.dataType = source["dataType"];
+	        this.dataLength = source["dataLength"];
+	        this.dataPrecision = source["dataPrecision"];
+	        this.dataScale = source["dataScale"];
+	        this.nullable = source["nullable"];
+	        this.columnId = source["columnId"];
+	    }
+	}
 	export class ColumnInfo {
 	    name: string;
 	    type: string;
@@ -46,6 +70,34 @@ export namespace models {
 	        this.role = source["role"];
 	    }
 	}
+	export class ConstraintInfo {
+	    name: string;
+	    constraintType: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new ConstraintInfo(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.constraintType = source["constraintType"];
+	    }
+	}
+	export class IndexInfo {
+	    name: string;
+	    uniqueness: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new IndexInfo(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.uniqueness = source["uniqueness"];
+	    }
+	}
 	export class QueryResult {
 	    columns: ColumnInfo[];
 	    rows: any[][];
@@ -53,6 +105,7 @@ export namespace models {
 	    execTimeMs: number;
 	    messages: string[];
 	    hasMore: boolean;
+	    dbmsOutputLines?: string[];
 	
 	    static createFrom(source: any = {}) {
 	        return new QueryResult(source);
@@ -66,6 +119,7 @@ export namespace models {
 	        this.execTimeMs = source["execTimeMs"];
 	        this.messages = source["messages"];
 	        this.hasMore = source["hasMore"];
+	        this.dbmsOutputLines = source["dbmsOutputLines"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -85,6 +139,20 @@ export namespace models {
 		    }
 		    return a;
 		}
+	}
+	export class TableInfo {
+	    name: string;
+	    numRows?: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new TableInfo(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.numRows = source["numRows"];
+	    }
 	}
 
 }

@@ -123,10 +123,46 @@
 }
 
 .sidebar-list-wrap {
-  flex: 1;
+  flex: 0 1 auto;
+  max-height: 220px;
   min-height: 0;
   overflow: auto;
   padding: 8px;
+}
+
+.sidebar-schema-wrap {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 0 8px 8px;
+  overflow: hidden;
+}
+
+.schema-tree {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.schema-tree .ant-tree {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+.schema-tree-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+  margin-bottom: 6px;
+}
+
+.schema-tree-placeholder {
+  padding: 8px 4px;
 }
 
 .sidebar-list .ant-list-item {

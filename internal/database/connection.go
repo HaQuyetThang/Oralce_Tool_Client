@@ -218,6 +218,27 @@ func (m *ConnectionManager) ConnectionByID(connID string) *sql.DB {
 	return m.connections[connID]
 }
 
+// ResolveDB returns the open pool for connID, or the active pool if connID is empty.
+// The returned id is the resolved profile id (non-empty when db is non-nil).
+func (m *ConnectionManager) ResolveDB(connID string) (db *sql.DB, resolvedID string, err error) {
+	id := strings.TrimSpace(connID)
+	if id == "" {
+		m.mu.RLock()
+		id = m.activeConnID
+		m.mu.RUnlock()
+	}
+	if id == "" {
+		return nil, "", errors.New("no connection: pass connID or connect and set an active connection")
+	}
+	m.mu.RLock()
+	db = m.connections[id]
+	m.mu.RUnlock()
+	if db == nil {
+		return nil, id, fmt.Errorf("not connected: %s", id)
+	}
+	return db, id, nil
+}
+
 // ConnectedIDs returns ids of all open pools.
 func (m *ConnectionManager) ConnectedIDs() []string {
 	m.mu.RLock()

@@ -13,7 +13,7 @@ function defaultTitle(index: number): string {
   return `SQL ${index}`;
 }
 
-export type ResultSubTab = "results" | "messages";
+export type ResultSubTab = "results" | "messages" | "dbms";
 
 export interface EditorState {
   tabs: EditorTab[];
@@ -36,6 +36,8 @@ export interface EditorState {
   renameTab: (id: string, title: string) => void;
   setTabConnection: (tabId: string, connectionId: string) => void;
   setExecuteLoading: (loading: boolean) => void;
+  /** Append identifier text to the active worksheet (used by schema tree). */
+  appendSqlToActiveTab: (text: string) => void;
 }
 
 const initialTabId = newTabId();
@@ -165,5 +167,24 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
   setExecuteLoading: (loading: boolean) => {
     set({ executeLoading: loading });
+  },
+
+  appendSqlToActiveTab: (text: string) => {
+    const t = text.trim();
+    if (!t) {
+      return;
+    }
+    const id = get().activeTabId;
+    const tab = get().tabs.find((x) => x.id === id);
+    if (!tab) {
+      return;
+    }
+    const cur = tab.content;
+    const sep =
+      cur.length > 0 && !cur.endsWith("\n") && !cur.endsWith(" ") ? " " : "";
+    const next = cur + sep + t;
+    set((s) => ({
+      tabs: s.tabs.map((x) => (x.id === id ? { ...x, content: next } : x)),
+    }));
   },
 }));
