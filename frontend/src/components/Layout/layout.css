@@ -30,8 +30,10 @@
 .editor-panel {
   display: flex;
   flex-direction: column;
+  flex: 1;
   height: 100%;
   min-height: 0;
+  overflow: hidden;
 }
 
 .editor-toolbar {
@@ -70,8 +72,14 @@
   flex: 1 1 0;
   min-height: 0;
   min-width: 0;
-  display: flex;
-  flex-direction: column;
+}
+
+/* Monaco sometimes mis-measures inside nested split panes (WebView2 + flex).
+   Force its internal root/guard to fully fill the available space. */
+.editor-monaco-wrap .monaco-editor,
+.editor-monaco-wrap .monaco-editor .overflow-guard {
+  width: 100% !important;
+  height: 100% !important;
 }
 
 .pane-results {

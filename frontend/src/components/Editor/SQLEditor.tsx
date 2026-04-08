@@ -91,16 +91,22 @@ export const SQLEditor = forwardRef<SQLEditorHandle, SQLEditorProps>(
           onFormatResultRef.current?.(r);
         }
       );
+      // Ensure editor receives keyboard focus (WebView2 can be finicky after layout changes).
+      setTimeout(() => ed.focus(), 0);
     };
 
     return (
       <Editor
         height="100%"
+        width="100%"
         theme={MONACO_THEME_ORACLE_SQL}
         language="sql"
         value={value}
         onChange={(v) => onChange(v ?? "")}
         onMount={handleMount}
+        wrapperProps={{
+          style: { flex: "1 1 0", minHeight: 0, minWidth: 0, display: "flex" },
+        }}
         options={{
           fontSize: 14,
           fontFamily:
@@ -111,6 +117,8 @@ export const SQLEditor = forwardRef<SQLEditorHandle, SQLEditorProps>(
           scrollBeyondLastLine: false,
           automaticLayout: true,
           tabSize: 2,
+          padding: { top: 8, bottom: 8 },
+          readOnly: false,
           // WebView2: EditContext path can paint an invisible text layer while cursor still shows.
           editContext: false,
           experimentalWhitespaceRendering: "off",
